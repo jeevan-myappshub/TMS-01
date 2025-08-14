@@ -1,0 +1,10 @@
+python-dotenv
+flask 
+flask-cors
+pymysql
+sqlalchemy  
+flask_sqlalchemy  
+Faker
+psycopg2-binary
+boto3
+pytz
