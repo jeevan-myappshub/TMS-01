@@ -287,6 +287,9 @@ const DailyLogChangesDialog = ({ open, onOpenChange, logId, projects }) => {
 const TimesheetTable = ({ day, logs, projects, loading, onViewChanges }) => {
   const totalDailyHours = sumTotalHours(logs);
 
+  // Check if any log is rejected
+  const showRejectionReason = logs.some((log) => log.status_review === "Rejected");
+
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-400 shadow-sm bg-white">
       <table className="min-w-full divide-y divide-gray-300">
@@ -311,13 +314,21 @@ const TimesheetTable = ({ day, logs, projects, loading, onViewChanges }) => {
               Status
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+              Reviewer
+            </th>
+            {showRejectionReason && (
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
+                Rejection Reason
+              </th>
+            )}
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
               Actions
             </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
           {logs.length > 0 ? (
-            logs.map((log, idx) => (
+            logs.map((log) => (
               <tr
                 key={`${log.id}-${day.date}`}
                 className={`hover:bg-gray-50 transition-colors ${log.error ? "bg-red-50" : ""}`}
@@ -325,16 +336,32 @@ const TimesheetTable = ({ day, logs, projects, loading, onViewChanges }) => {
                 <td className="px-4 py-3 text-sm text-gray-600">
                   {projects.find((p) => String(p.id) === String(log.project_id))?.name || "Unknown"}
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-600">{log.description || "N/A"}</td>
+              <td className="px-4 py-3 text-sm text-gray-600">
+                {log.description || "No description provided"}
+              </td>
                 <td className="px-4 py-3 text-sm text-gray-600">{log.start_time || "N/A"}</td>
                 <td className="px-4 py-3 text-sm text-gray-600">{log.end_time || "N/A"}</td>
-                <td className={`px-4 py-3 text-sm text-gray-600 flex items-center gap-2 ${log.error ? "text-red-600" : ""}`}>
-                  {typeof log.total_hours === "number" ? formatFloatToTime(log.total_hours) : log.total_hours || "0:00"}
+                <td
+                  className={`px-4 py-3 text-sm text-gray-600 flex items-center gap-2 ${
+                    log.error ? "text-red-600" : ""
+                  }`}
+                >
+                  {typeof log.total_hours === "number"
+                    ? formatFloatToTime(log.total_hours)
+                    : log.total_hours || "0:00"}
                   {log.error && <AlertCircle className="h-4 w-4 text-red-600" title={log.error} />}
                 </td>
                 <td className="px-4 py-3 text-sm">
                   <StatusIcon status={formatStatusReview(log.status_review)} />
                 </td>
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {log.reviewer_name || "N/A"}
+                </td>
+                {showRejectionReason && (
+                  <td className="px-4 py-3 text-sm text-red-500">
+                    {log.status_review === "Rejected" ? log.rejection_reason || "N/A" : "-"}
+                  </td>
+                )}
                 <td className="px-4 py-3">
                   <button
                     onClick={() => onViewChanges(log.id)}
@@ -350,7 +377,10 @@ const TimesheetTable = ({ day, logs, projects, loading, onViewChanges }) => {
             ))
           ) : (
             <tr>
-              <td colSpan={7} className="text-gray-500 text-center py-6 text-sm">
+              <td
+                colSpan={showRejectionReason ? 9 : 8}
+                className="text-gray-500 text-center py-6 text-sm"
+              >
                 No logs found for this day.
               </td>
             </tr>
@@ -366,6 +396,7 @@ const TimesheetTable = ({ day, logs, projects, loading, onViewChanges }) => {
                 {formatFloatToTime(totalDailyHours)}
               </td>
               <td></td>
+              {showRejectionReason && <td></td>}
             </tr>
           </tfoot>
         )}
@@ -373,6 +404,7 @@ const TimesheetTable = ({ day, logs, projects, loading, onViewChanges }) => {
     </div>
   );
 };
+
 
 // PreviousTimesheet Component
 export default function PreviousTimesheet() {
@@ -451,9 +483,8 @@ export default function PreviousTimesheet() {
 
   const handleApplyFilters = useCallback(async () => {
     if (filterStartDate && filterEndDate && new Date(filterStartDate) > new Date(filterEndDate)) {
-      toast.error("Start date must be before or equal to end date.", {
-        style: { background: "#FEE2E2", color: "#EF4444" },
-      });
+      toast.error("Start date must be before or equal to end date.", 
+      );
       return;
     }
 
@@ -511,6 +542,8 @@ export default function PreviousTimesheet() {
             total_hours: log.total_hours !== null && !isNaN(log.total_hours) ? formatFloatToTime(log.total_hours) : "0:00",
             log_date: log.log_date,
             status_review: formatStatusReview(log.status_review),
+            reviewer_name: log.reviewer_name || "",
+            rejection_reason: log.rejection_reason || "",
             error: null,
           };
           const timeError = checkTimeConflict(logsMap[logDate], newLog, logsMap[logDate].length);

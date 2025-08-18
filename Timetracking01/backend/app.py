@@ -24,7 +24,7 @@ from models.managerproject import ManagerProjectAssignment
 
 from handlers.employee.employee import get_employee_profile_with_hierarchy, get_employees_with_details, add_employee, get_dashboard_init,update_reviewer_for_employee
 from handlers.dailylogchanges.dailylogchanges import get_daily_log_changes
-from handlers.dailylogs.dailylogs import get_daily_logs_by_employeee, get_latest_seven_days_daily_logs,get_logs_by_reviewer,save_daily_logs,update_log_review_status,get_todays_logs
+from handlers.dailylogs.dailylogs import get_daily_logs_by_employeee, get_latest_seven_days_daily_logs,save_daily_logs,update_log_review_status,get_todays_logs
 from handlers.department.department import get_departments, add_department, update_department, delete_department
 from handlers.designation.designation import fetch_designations, add_designation, update_designation, delete_designation
 # from handlers.project.project import list_projects,add_project
@@ -168,6 +168,56 @@ def get_latest_seven_days_logs(employee_id):
 def review_daily_log():
     return update_log_review_status()
 
+# @app.route("/api/daily-logs/by-reviewer", methods=["GET"])
+# def daily_logs_by_reviewer():
+#     """
+#     Query Parameters:
+#       - reviewer_id: int (required)
+#       - start_date: string (YYYY-MM-DD, optional)
+#       - end_date: string (YYYY-MM-DD, optional)
+#       - project_id: int (optional)
+#       - status_review: string (optional)
+#     Returns:
+#       {
+#         "logs": [...],
+#         "projects": [...]
+#       }
+#     """
+#     reviewer_id = request.args.get("reviewer_id", type=int)
+#     if not reviewer_id:
+#         return jsonify({"error": "reviewer_id is required"}), 400
+
+#     start_date = request.args.get("start_date")
+#     end_date = request.args.get("end_date")
+#     project_id = request.args.get("project_id", type=int)
+#     status_review = request.args.get("status_review")
+
+#     session = get_session()
+#     try:
+#         query = session.query(DailyLog).filter(DailyLog.reviewer_id == reviewer_id)
+#         if start_date:
+#             query = query.filter(DailyLog.log_date >= start_date)
+#         if end_date:
+#             query = query.filter(DailyLog.log_date <= end_date)
+#         if project_id:
+#             query = query.filter(DailyLog.project_id == project_id)
+#         if status_review and status_review != "all":
+#             query = query.filter(DailyLog.status_review == status_review)
+
+#         logs = query.order_by(DailyLog.log_date.desc()).all()
+
+#         # Build unique projects from logs
+#         project_ids = {log.project_id for log in logs if log.project_id}
+#         projects = session.query(Project).filter(Project.id.in_(project_ids)).all()
+#         projects_data = [proj.as_dict() for proj in projects]
+
+#         return jsonify({
+#             "logs": [log.as_dict() for log in logs],
+#             "projects": projects_data
+#         }), 200
+#     finally:
+#         safe_close(session)
+
 @app.route("/api/daily-logs/by-reviewer", methods=["GET"])
 def daily_logs_by_reviewer():
     """
@@ -194,29 +244,91 @@ def daily_logs_by_reviewer():
 
     session = get_session()
     try:
-        query = session.query(DailyLog).filter(DailyLog.reviewer_id == reviewer_id)
+        # 🔹 Step 1: Find employees linked to this reviewer
+        # Current employees
+        current_employee_ids = {
+            emp_id for (emp_id,) in session.query(DailyLog.employee_id)
+            .filter(DailyLog.reviewer_id == reviewer_id).distinct()
+        }
+
+        # Employees who had this reviewer in history
+        history_employee_ids = {
+            emp_id for (emp_id,) in session.query(DailyLog.employee_id)
+            .join(DailyLogChange, DailyLogChange.daily_log_id == DailyLog.id)
+            .filter(DailyLogChange.reviewer_id == reviewer_id).distinct()
+        }
+
+        employee_ids = current_employee_ids.union(history_employee_ids)
+
+        if not employee_ids:
+            return jsonify({"logs": [], "projects": []}), 200
+
+        # 🔹 Step 2: Fetch all logs for these employees in one query
+        logs = session.query(DailyLog).filter(DailyLog.employee_id.in_(employee_ids)).all()
+
+        # Apply filters
         if start_date:
-            query = query.filter(DailyLog.log_date >= start_date)
+            logs = [log for log in logs if str(log.log_date) >= start_date]
         if end_date:
-            query = query.filter(DailyLog.log_date <= end_date)
+            logs = [log for log in logs if str(log.log_date) <= end_date]
         if project_id:
-            query = query.filter(DailyLog.project_id == project_id)
+            logs = [log for log in logs if log.project_id == project_id]
         if status_review and status_review != "all":
-            query = query.filter(DailyLog.status_review == status_review)
+            logs = [log for log in logs if log.status_review == status_review]
 
-        logs = query.order_by(DailyLog.log_date.desc()).all()
+        if not logs:
+            return jsonify({"logs": [], "projects": []}), 200
 
-        # Build unique projects from logs
-        project_ids = {log.project_id for log in logs if log.project_id}
+        log_ids = [log.id for log in logs]
+
+        # 🔹 Step 3: Fetch all history for these logs in one query
+        changes = session.query(DailyLogChange).filter(DailyLogChange.daily_log_id.in_(log_ids)).all()
+        changes_by_log = {}
+        for ch in changes:
+            changes_by_log.setdefault(ch.daily_log_id, []).append(ch.as_dict())
+
+        # Attach changes to logs
+        logs_with_history = []
+        for log in logs:
+            log_dict = log.as_dict()
+            log_dict["reviewer_changes"] = sorted(
+                changes_by_log.get(log.id, []),
+                key=lambda x: x["changed_at"],
+                reverse=True
+            )
+            logs_with_history.append(log_dict)
+
+        # 🔹 Step 4: Fetch unique projects
+        project_ids = {log["project_id"] for log in logs_with_history if log["project_id"]}
         projects = session.query(Project).filter(Project.id.in_(project_ids)).all()
         projects_data = [proj.as_dict() for proj in projects]
 
         return jsonify({
-            "logs": [log.as_dict() for log in logs],
+            "logs": logs_with_history,
             "projects": projects_data
         }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     finally:
         safe_close(session)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # @app.route("/api/daily-logs/by-reviewer", methods=["GET"])
@@ -721,10 +833,11 @@ def save_daily_logs():
                 log.reviewer_id = reviewer_id  # <-- Set reviewer
                 if old_description != task_description:
                     change = DailyLogChange(
-                        daily_log_id=log_id,
+                        daily_log_id=log.id,
                         project_id=project_id,
                         new_description=task_description,
-                        changed_at=datetime.utcnow()
+                        changed_at=datetime.utcnow(),
+                        reviewer_id=reviewer_id  # <-- Set reviewer
                     )
                     session.add(change)
             else:
@@ -745,7 +858,8 @@ def save_daily_logs():
                     daily_log_id=log.id,
                     project_id=project_id,
                     new_description=task_description,
-                    changed_at=datetime.utcnow()
+                    changed_at=datetime.utcnow(),
+                    reviewer_id=reviewer_id  # <-- Set reviewer
                 )
                 session.add(change)
 

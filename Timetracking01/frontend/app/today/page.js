@@ -16,10 +16,10 @@ import "react-toastify/dist/ReactToastify.css";
 import Header from "../../components/header";
 import Sidebar from "../../components/sidebar";
 import Footer from "../../components/footer";
+import DateFilterDropdown from "../../components/datefilterdropdown";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:5000";
 const CURRENT_EMAIL = process.env.NEXT_PUBLIC_EMAIL || "";
-console.log("process.env.NEXT_PUBLIC_EMAIL:", process.env.NEXT_PUBLIC_EMAIL);
 const AUTH_TOKEN = process.env.NEXT_PUBLIC_AUTH_TOKEN || "";
 
 const toastConfig = {
@@ -28,7 +28,6 @@ const toastConfig = {
   hideProgressBar: true,
   closeOnClick: true,
   pauseOnHover: true,
-  draggable: true,
   style: { fontSize: "14px" },
 };
 
@@ -254,6 +253,7 @@ const DailyLogChangesDialog = ({ open, onOpenChange, logChanges, projects }) => 
   );
 };
 
+// TimesheetTable Component
 const TimesheetTable = ({
   day,
   logs,
@@ -301,6 +301,12 @@ const TimesheetTable = ({
       const updatedLog = { ...updated[idx], [field]: value };
       const conflictError = checkTimeConflict(updated, updatedLog, idx);
       const duplicateError = checkDuplicateEntry(updated, updatedLog, idx);
+      if (conflictError) {
+        toast.error(conflictError, { ...toastConfig });
+      }
+      if (duplicateError) {
+        toast.error(duplicateError, { ...toastConfig });
+      }
       updated[idx] = {
         ...updatedLog,
         total_hours: !timeError && !conflictError && isValidTime(start) && isValidTime(end) ? totalHours : "0:00",
@@ -384,20 +390,44 @@ const TimesheetTable = ({
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3">
-                  {isEditable ? (
-                    <textarea
-                      className="w-full border border-gray-300 dark:border-gray-600 rounded-md p-2 text-sm resize-y focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-300 focus:border-indigo-500 dark:focus:border-indigo-300 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50"
-                      value={log.description || ""}
-                      onChange={(e) => handleDescriptionChange(idx, e.target.value)}
-                      placeholder="Enter detailed description"
-                      rows={2}
-                      aria-label="Task description"
-                    />
-                  ) : (
-                    <span className="text-gray-600 dark:text-gray-300">{log.description || "N/A"}</span>
-                  )}
-                </td>
+             <td className="px-4 py-3 align-top">
+  {isEditable ? (
+    <textarea
+      className="w-full border border-gray-300 dark:border-gray-600 rounded-md p-2 text-sm 
+                focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-300 
+                focus:border-indigo-500 dark:focus:border-indigo-300 
+                bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-50 
+                leading-relaxed resize-none overflow-y-auto"
+      value={log.description || ""}
+      onChange={(e) => {
+        handleDescriptionChange(idx, e.target.value);
+
+        // reset height
+        e.target.style.height = "auto";
+
+        // each line ~ 20px (depends on text-sm & leading-relaxed)
+        const lineHeight = 20; 
+        const maxLines = 4;
+        const maxHeight = lineHeight * maxLines;
+
+        // allow expansion but cap at 4 lines
+        e.target.style.height = Math.min(e.target.scrollHeight, maxHeight) + "px";
+      }}
+      placeholder="Enter detailed description"
+      rows={1}
+      style={{ maxHeight: "80px" }} // 4 lines × 20px = 80px
+      aria-label="Task description"
+    />
+  ) : (
+    <p
+      className="text-gray-600 dark:text-gray-300 whitespace-pre-wrap break-words leading-relaxed 
+                 max-h-20 overflow-y-auto"
+      style={{ lineHeight: "20px" }} // control line height
+    >
+      {log.description || "N/A"}
+    </p>
+  )}
+</td>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-gray-500 dark:text-gray-400" />
@@ -520,6 +550,8 @@ const TimesheetTable = ({
   );
 };
 
+// TodayTimesheet Component
+// TodayTimesheet Component
 export default function TodayTimesheet() {
   const [employee, setEmployee] = useState(null);
   const [projects, setProjects] = useState([]);
@@ -530,11 +562,25 @@ export default function TodayTimesheet() {
   const [currentDate, setCurrentDate] = useState("");
   const router = useRouter();
 
+  // Initialize default week dates for week view navigation
   const today = useMemo(() => {
     const date = new Date();
     date.setMinutes(date.getMinutes() + date.getTimezoneOffset() + 330);
     return toYYYYMMDD(date);
   }, []);
+
+  const { defaultWeekStart, defaultWeekEnd } = useMemo(() => {
+    const startOfWeek = new Date(today);
+    const dayOfWeek = startOfWeek.getDay();
+    const offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    startOfWeek.setDate(startOfWeek.getDate() - offset);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    return {
+      defaultWeekStart: toYYYYMMDD(startOfWeek),
+      defaultWeekEnd: toYYYYMMDD(endOfWeek),
+    };
+  }, [today]);
 
   const todayDateObj = useMemo(() => ({
     date: currentDate || today,
@@ -689,19 +735,20 @@ export default function TodayTimesheet() {
     }
 
     const totalHoursFloat = totalMinutes / 60;
-    const payload = [
-      {
-        id: String(log.id).startsWith("temp-") ? null : parseInt(log.id, 10),
-        employee_id: employee.id,
-        log_date: date,
-        project_id: parseInt(log.project_id, 10),
-        start_time: log.start_time,
-        end_time: log.end_time,
-        total_hours: totalHoursFloat,
-        task_description: log.description,
-        status_review: "pending",
-      },
-    ];
+const payload = [
+  {
+    id: String(log.id).startsWith("temp-") ? null : parseInt(log.id, 10),
+    employee_id: employee.id,
+    log_date: date,
+    project_id: parseInt(log.project_id, 10),
+    start_time: log.start_time,
+    end_time: log.end_time,
+    total_hours: totalHoursFloat,
+    task_description: log.description,
+    status_review: "pending",
+    reviewer_id: employee.reviewer_id || null, // Ensure this is included
+  },
+];
 
     setLoading(true);
     try {
@@ -726,7 +773,7 @@ export default function TodayTimesheet() {
           id: savedLogId,
           status_review: "Pending",
           error: null,
-          changes: [],
+          changes: savedLog[0]?.changes || [], // Ensure changes are updated from response
           isEdited: false,
         };
         return { ...prev, [date]: updatedLogs };
@@ -770,7 +817,7 @@ export default function TodayTimesheet() {
       ];
       const duplicateError = checkDuplicateEntry(newLogs, newLogs[newLogs.length - 1], newLogs.length - 1);
       if (duplicateError) {
-        toast.error(duplicateError, { ...toastConfig});
+        toast.error(duplicateError, { ...toastConfig });
         return prev;
       }
       toast.success("New log entry added!", {
@@ -815,6 +862,10 @@ export default function TodayTimesheet() {
     router.push("/");
   }, [router]);
 
+  const handleWeekViewSelect = useCallback(() => {
+    router.push("/"); // Replace with actual week view route if different
+  }, [router]);
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-gray-900">
       <Header />
@@ -829,12 +880,10 @@ export default function TodayTimesheet() {
                   <h2 className="text-2xl font-bold text-white">Today's Timesheet</h2>
                   <p className="mt-1 text-indigo-100 text-sm">Manage your daily work logs</p>
                 </div>
-                <button
-                  onClick={handleBack}
-                  className="bg-white text-gray-600 hover:bg-indigo-100 font-semibold px-4 py-2 rounded-md text-sm shadow"
-                >
-                  📅 View Weekly Log
-                </button>
+                <DateFilterDropdown
+                  router={router}
+                  onWeekViewSelect={handleWeekViewSelect}
+                />
               </div>
               <div className="p-6">
                 {loading ? (

@@ -329,6 +329,8 @@ def save_daily_logs():
 #         safe_close(session)
 
 
+
+
 def update_log_review_status():
     """
     Payload:
@@ -363,55 +365,70 @@ def update_log_review_status():
         safe_close(session)
 
 
-def get_logs_by_reviewer():
-    """
-    Query Parameters:
-      - reviewer_email: string (required)
-    Example:
-      /api/daily-logs/by-reviewer?reviewer_email=reviewer@example.com
-
-    """
-    session = get_session()
-    try:
-        reviewer_id = request.args.get("reviewer_id", type=int)
-        reviewer_email = request.args.get("reviewer_email", type=str)
-
-        if not reviewer_id and not reviewer_email:
-            return jsonify({"error": "Either reviewer_id or reviewer_email is required"}), 400
-
-        if not reviewer_id and reviewer_email:
-            reviewer = session.query(Employee).filter(Employee.email == reviewer_email).first()
-            if not reviewer:
-                return jsonify({"error": "Reviewer not found"}), 404
-            reviewer_id = reviewer.id
 
 
-        # Query logs where the current reviewer is the given reviewer
-        current_logs = session.query(DailyLog).filter(DailyLog.reviewer_id == reviewer_id).all()
 
-        # Query logs where the reviewer was previously assigned (from DailyLogChange)
-        previous_logs = (
-            session.query(DailyLogChange)
-            .filter(DailyLogChange.reviewer_id == reviewer_id)
-            .all()
-        )
 
-        # Combine current and previous logs
-        all_logs = list(set(current_logs + [change.daily_log for change in previous_logs]))
 
-        # Convert logs to dictionary format
-        log_data = [log.as_dict() for log in all_logs]
 
-        # Get related projects
-        project_ids = list(set(log.project_id for log in all_logs if log.project_id))
-        projects = session.query(Project).filter(Project.id.in_(project_ids)).all() if project_ids else []
-        project_data = [proj.as_dict() for proj in projects]
+# def get_logs_by_reviewer():
+#     """
+#     Query Parameters:
+#       - reviewer_id: int (optional if reviewer_email given)
+#       - reviewer_email: string (optional if reviewer_id given)
 
-        return jsonify({"logs": log_data, "projects": project_data}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        safe_close(session)        
+#     Returns all logs where the reviewer is/was assigned (current or historical).
+#     """
+#     session = get_session()
+#     try:
+#         reviewer_id = request.args.get("reviewer_id", type=int)
+#         reviewer_email = request.args.get("reviewer_email", type=str)
+
+#         if not reviewer_id and not reviewer_email:
+#             return jsonify({"error": "Either reviewer_id or reviewer_email is required"}), 400
+
+#         if not reviewer_id and reviewer_email:
+#             reviewer = session.query(Employee).filter(Employee.email == reviewer_email).first()
+#             if not reviewer:
+#                 return jsonify({"error": "Reviewer not found"}), 404
+#             reviewer_id = reviewer.id
+
+#         # Only logs where reviewer is/was assigned
+#         current_logs = session.query(DailyLog).filter(DailyLog.reviewer_id == reviewer_id).all()
+#         previous_changes = session.query(DailyLogChange).filter(DailyLogChange.reviewer_id == reviewer_id).all()
+#         previous_logs = [change.daily_log for change in previous_changes]
+#         all_logs = current_logs + previous_logs
+
+#         project_ids = list(set([log.project_id for log in all_logs if log.project_id]))
+
+#         logs_with_history = []
+#         for log in all_logs:
+#             changes = (
+#                 session.query(DailyLogChange)
+#                 .filter(DailyLogChange.daily_log_id == log.id)
+#                 .order_by(DailyLogChange.changed_at.desc())
+#                 .all()
+#             )
+#             log_dict = log.as_dict()
+#             log_dict["reviewer_changes"] = [ch.as_dict() for ch in changes]
+#             logs_with_history.append(log_dict)
+
+#         projects = session.query(Project).filter(Project.id.in_(project_ids)).all()
+#         project_data = [proj.as_dict() for proj in projects]
+
+#         return jsonify({"logs": logs_with_history, "projects": project_data}), 200
+
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+#     finally:
+#         safe_close(session)
+
+
+
+
+
+
+
 
 # def get_logs_by_reviewer():
 #     """

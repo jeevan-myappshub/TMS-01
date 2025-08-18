@@ -10,6 +10,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import Header from "../components/header";
 import Sidebar from "../components/sidebar";
 import Footer from "../components/footer";
+import DateFilterDropdown from "@/components/datefilterdropdown";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:5000";
 // const CURRENT_EMAIL = "tina.46@example.com";
@@ -275,7 +276,7 @@ const WeeklyTimesheetTable = ({ weekDates, logsByDay, projects }) => {
 
     return (
       <div className="relative group w-fit">
-        <div className={`${item.color} rounded-full p-0.5`}>{item.icon}</div>
+        <div className={`${item.color} rounded-full p-0.3`}>{item.icon}</div>
         <span className="absolute left-1/2 transform -translate-x-1/2 bottom-6 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10">
           {status}
         </span>
@@ -310,14 +311,20 @@ const WeeklyTimesheetTable = ({ weekDates, logsByDay, projects }) => {
                 <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">{project.name}</td>
                 {weekDates.map((day) => (
                   <td key={day.date} className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300">
-                    <div className="flex flex-row items-center justify-center gap-2">
-                      {getProjectStatus(project.id, day.date) ? (
-                        <StatusIcon status={getProjectStatus(project.id, day.date)} />
-                      ) : (
-                        <div className="w-4 h-4 flex-shrink-0"></div>
-                      )}
-                      <span>{getProjectHours(project.id, day.date)}</span>
-                    </div>
+            <div className="flex flex-row items-center justify-center space-x-2">
+              <div className="flex items-center gap-2">
+                {getProjectStatus(project.id, day.date) ? (
+                  <StatusIcon
+                    status={getProjectStatus(project.id, day.date)}
+                    className="w-4 h-4"
+                  />
+                ) : (
+                  <div className="w-4 h-4 flex-shrink-0"></div>
+                )}
+                <span className="text-sm font-medium">{getProjectHours(project.id, day.date)}</span>
+              </div>
+            </div>
+
                   </td>
                 ))}
                 <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 font-semibold text-right">
@@ -537,6 +544,8 @@ export default function Home() {
     router.push("/today");
   }, [router]);
 
+  
+
   const handleBackToToday = useCallback(() => {
     window.location.href = "/";
   }, []);
@@ -549,6 +558,15 @@ export default function Home() {
     fetchWeeklyLogs(defaultWeekStart, defaultWeekEnd);
   };
 
+// Inside Home component
+const handleWeekViewSelect = useCallback(() => {
+  setTempWeekStart(defaultWeekStart);
+  setTempWeekEnd(defaultWeekEnd);
+  setSelectedWeekStart(defaultWeekStart);
+  setSelectedWeekEnd(defaultWeekEnd);
+  fetchWeeklyLogs(defaultWeekStart, defaultWeekEnd);
+}, [defaultWeekStart, defaultWeekEnd, fetchWeeklyLogs]);
+
 return (
   <div className="flex flex-col min-h-screen bg-gray-100 dark:bg-gray-900">
     <Header />
@@ -557,53 +575,53 @@ return (
       <main className="flex-1 ml-16 p-8 pt-24 overflow-y-auto">
         <ToastContainer position="top-right" autoClose={3000} theme="colored" />
 
-        {/* Date Filters Section (Moved Here) */}
-                <div className="w-full flex items-start justify-end">
-  <div className="dark:bg-gray-800 shadow-md rounded-lg  mb-4 flex items-center gap-2">
-    <div className="relative">
-      <DatePicker
-        selected={tempWeekStart ? new Date(tempWeekStart) : null}
-        onChange={(date) => setTempWeekStart(toYYYYMMDD(date))}
-        dateFormat="MM/dd/yyyy"
-        customInput={
-          <button className="appearance-none bg-transparent dark:bg-gray-700 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-gray-600 font-semibold px-4 py-2 rounded-md text-sm shadow flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-300">
-            <Calendar className="h-4 w-4 text-indigo-600" />
-            {tempWeekStart || "Week from"}
-          </button>
-        }
-      />
-    </div>
+        {/* Date Filters Section */}
+        <div className="w-full flex items-start justify-end">
+          <div className="dark:bg-gray-800 shadow-md rounded-lg mb-4 flex items-center gap-2">
+            <div className="relative">
+              <DatePicker
+                selected={tempWeekStart ? new Date(tempWeekStart) : null}
+                onChange={(date) => setTempWeekStart(toYYYYMMDD(date))}
+                dateFormat="MM/dd/yyyy"
+                customInput={
+                  <button className="appearance-none bg-transparent dark:bg-gray-700 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-gray-600 font-semibold px-4 py-2 rounded-md text-sm shadow flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                    <Calendar className="h-4 w-4 text-indigo-600" />
+                    {tempWeekStart || "Week from"}
+                  </button>
+                }
+              />
+            </div>
 
-    <span className="text-gray-600 dark:text-gray-300 font-semibold">To</span>
+            <span className="text-gray-600 dark:text-gray-300 font-semibold">To</span>
 
-    <div className="relative">
-      <DatePicker
-        selected={tempWeekEnd ? new Date(tempWeekEnd) : null}
-        onChange={(date) => setTempWeekEnd(toYYYYMMDD(date))}
-        dateFormat="MM/dd/yyyy"
-        customInput={
-          <button className="appearance-none bg-transparent dark:bg-gray-700 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-gray-600 font-semibold px-4 py-2 rounded-md text-sm shadow flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-300">
-            <Calendar className="h-4 w-4 text-indigo-600" />
-            {tempWeekEnd || "until"}
-          </button>
-        }
-      />
-    </div>
+            <div className="relative">
+              <DatePicker
+                selected={tempWeekEnd ? new Date(tempWeekEnd) : null}
+                onChange={(date) => setTempWeekEnd(toYYYYMMDD(date))}
+                dateFormat="MM/dd/yyyy"
+                customInput={
+                  <button className="appearance-none bg-transparent dark:bg-gray-700 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-gray-600 font-semibold px-4 py-2 rounded-md text-sm shadow flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-indigo-300">
+                    <Calendar className="h-4 w-4 text-indigo-600" />
+                    {tempWeekEnd || "until"}
+                  </button>
+                }
+              />
+            </div>
 
-    <button
-      onClick={handleApplyFilters}
-      className="bg-green-600 text-white hover:bg-green-700 font-semibold px-2 py-1 rounded-md text-sm shadow focus:outline-none focus:ring-2 focus:ring-green-300"
-    >
-      Apply
-    </button>
-    <button
-      onClick={handleClearDates}
-      className="bg-red-600 text-white px-2 py-1 rounded-md hover:bg-red-700 focus:outline-none text-sm shadow focus:ring-2 focus:ring-red-300"
-    >
-      Clear
-    </button>
-  </div>
-</div>
+            <button
+              onClick={handleApplyFilters}
+              className="bg-green-600 text-white hover:bg-green-700 font-semibold px-2 py-1 rounded-md text-sm shadow focus:outline-none focus:ring-2 focus:ring-green-300"
+            >
+              Apply
+            </button>
+            <button
+              onClick={handleClearDates}
+              className="bg-red-600 text-white px-2 py-1 rounded-md hover:bg-red-700 focus:outline-none text-sm shadow focus:ring-2 focus:ring-red-300"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
 
         {/* Timesheet Summary */}
         <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden mb-8">
@@ -612,12 +630,10 @@ return (
               <h2 className="text-2xl font-bold text-white">Weekly Timesheet Overview</h2>
               <p className="mt-1 text-white text-sm">View your weekly work log summary</p>
             </div>
-            <button
-              onClick={handleViewTodayTimesheet}
-              className="bg-white text-indigo-600 hover:bg-indigo-100 font-semibold px-2 py-2 rounded-md text-sm shadow"
-            >
-              📅 View Today's Timesheet
-            </button>
+            <DateFilterDropdown
+              router={router}
+              onWeekViewSelect={handleWeekViewSelect} // Pass the callback
+            />
           </div>
 
           <div className="p-6">

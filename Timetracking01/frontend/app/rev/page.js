@@ -231,10 +231,18 @@ function ReviewLogDialog({ open, onOpenChange, log, projects, onReviewSubmit }) 
                 <Briefcase className="h-4 w-4 text-gray-500" />
                 <span className="text-sm text-gray-900 dark:text-gray-50">{getProjectName(log.project_id)}</span>
               </div>
-              <div className="flex items-start gap-2">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Description:</span>
-                <span className="text-sm text-gray-900 dark:text-gray-50">{log.task_description || "N/A"}</span>
-              </div>
+    <div className="flex items-start gap-2">
+      <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+        Description:
+      </span>
+
+      <div className="w-80 max-h-90 overflow-y-auto p-3 border border-gray-300 dark:border-gray-200 rounded-md bg-gray-50 dark:bg-gray-800">
+        <p className="text-sm text-gray-900 dark:text-gray-50 whitespace-pre-line leading-relaxed">
+          {log.task_description || "N/A"}
+        </p>
+      </div>
+    </div>
+
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-gray-500" />
                 <span className="text-sm text-gray-900 dark:text-gray-50">{formatHours(log.total_hours)}</span>

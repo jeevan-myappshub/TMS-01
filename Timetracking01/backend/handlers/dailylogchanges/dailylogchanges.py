@@ -7,15 +7,39 @@ from flask import Flask,jsonify,request
 
 
 
+# def get_daily_log_changes(log_id):
+#     session = get_session()
+#     try:
+#         log = session.get(DailyLog, log_id)
+#         if not log:
+#             return jsonify({"error": f"Daily log with id {log_id} not found"}), 404
+#         changes = session.query(DailyLogChange).filter_by(daily_log_id=log_id).order_by(DailyLogChange.changed_at.desc()).all()
+#         return jsonify([c.as_dict() for c in changes]), 200
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
+#     finally:
+#         safe_close(session)
+
+
 def get_daily_log_changes(log_id):
     session = get_session()
     try:
         log = session.get(DailyLog, log_id)
         if not log:
             return jsonify({"error": f"Daily log with id {log_id} not found"}), 404
-        changes = session.query(DailyLogChange).filter_by(daily_log_id=log_id).order_by(DailyLogChange.changed_at.desc()).all()
+
+        changes = (
+            session.query(DailyLogChange)
+            .filter_by(daily_log_id=log_id)
+            .order_by(DailyLogChange.changed_at.desc())
+            .all()
+        )
+
+        # Each change already has reviewer + rejection_reason in as_dict
         return jsonify([c.as_dict() for c in changes]), 200
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
     finally:
         safe_close(session)
+
